@@ -39,6 +39,18 @@ A Chrome extension for Shopify devs and QA. Shopify's own preview bar is unrelia
 - [ ] Mobile viewport: Shopify's compact bar variant is caught by the selectors; badge collapses to a dot.
 - [ ] A store with a strict `style-src` CSP (would block the injected hide CSS - none seen on standard storefronts).
 
+## Community pain this addresses
+
+The preview bar has been a long-running complaint among Shopify theme developers:
+
+- [Preview theme preview bar removed "hide" option](https://community.shopify.dev/t/preview-theme-preview-bar-removed-hide-option/14052) - Shopify removed the hide option, the bar blocks page elements during testing, and the `pb=0` workaround surfaced here. Shopify later added hide back, then its cached state became the "gone until the next `preview_theme_id` URL" trap this extension exists for.
+- [Visitors stuck with the admin preview bar on a live theme](https://community.shopify.dev/t/visitors-stuck-with-the-shopify-admin-preview-bar-on-my-live-theme-even-after-publishing-it-still-showing-as-preview-mode-despite-clearing-cookies-and-resetting-the-preview-link/22367) - the session-cached preview state leaking to real visitors after an A/B test theme was published.
+- [How can I remove the preview bar from my themes?](https://community.shopify.com/c/technical-q-a/how-can-i-remove-the-preview-bar-from-my-themes/td-p/670493) - the bar is intrusive and reappears on every navigation; CSS hacks passed around as the fix.
+- [Themekit #820: "theme open" parameter to hide the preview bar](https://github.com/Shopify/themekit/issues/820) - devs asking Shopify's own tooling for a `pb=0` flag.
+- [Slate #1068: add option to show preview bar](https://github.com/Shopify/slate/issues/1068) - the opposite problem: the bar removed with no way to bring it back, hurting multi-theme workflows.
+
+The common thread: the bar's visibility is controlled by opaque session state that devs and QA cannot see or reset. ShopifyBar replaces that with visible, local, reversible control - and a badge that always tells you which theme you are on.
+
 ## Known limitations
 
 - The `pb=1` force-show relies on behaviour reported by the dev community, not documented API; Shopify has changed this UI repeatedly.
