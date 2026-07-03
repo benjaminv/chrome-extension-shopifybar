@@ -2,6 +2,8 @@
 
 A Chrome extension for Shopify devs and QA. Shopify's own preview bar is unreliable - once hidden (its state is cached in the session), it does not come back until a `preview_theme_id` URL is used again, leaving devs and clients unsure which theme they are looking at. ShopifyBar makes the current theme always visible and puts preview-bar hiding under your control.
 
+Read the story behind it: [The preview bar that wouldn't come back (so I built my own)](https://benhu.netlify.app/posts/the-preview-bar-that-wouldnt-come-back). Build history in [BUILDLOG.md](BUILDLOG.md).
+
 ## Features
 
 - **Always-on theme badge**: a pill on every Shopify storefront page showing the theme name, colour-coded green `LIVE` or orange `PREVIEW`. Click it for details (theme ID, role, Shopify bar status) and actions. Auto-collapses to a dot on mobile viewports.
