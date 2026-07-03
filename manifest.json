@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "ShopifyBar",
+  "version": "0.1.0",
+  "description": "Always know which Shopify theme you are viewing - live or preview - even when Shopify's own preview bar is hidden. Hide the preview bar safely without losing track of where you are.",
+  "permissions": ["storage"],
+  "action": {
+    "default_popup": "src/popup.html",
+    "default_title": "ShopifyBar"
+  },
+  "content_scripts": [
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["src/main-world.js"],
+      "run_at": "document_idle",
+      "world": "MAIN"
+    },
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["src/hide-css.js", "src/content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
