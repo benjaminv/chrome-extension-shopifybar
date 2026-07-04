@@ -45,7 +45,7 @@ const render = () => {
       ? 'Shopify bar: hidden by ShopifyBar'
       : 'Shopify bar: visible'
     : live
-      ? 'Shopify bar: not present (live theme)'
+      ? 'Shopify bar: not present (normal on live theme - Restore bar can force it)'
       : 'Shopify bar: not present (hidden by Shopify - use Restore bar)';
 
   const btnSession = $('btnSessionHide');

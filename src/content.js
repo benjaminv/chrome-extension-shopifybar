@@ -73,30 +73,50 @@
   const forceShowUrl = () => {
     const url = new URL(location.href);
     const id = state.data?.theme?.id;
-    if (id && !themeRoleIsLive()) url.searchParams.set('preview_theme_id', String(id));
+    // Always include preview_theme_id (window.Shopify.theme.id works for the
+    // live theme too, no admin login needed): pb=1 alone is a no-op unless
+    // Shopify already has a preview session for this visit.
+    if (id) url.searchParams.set('preview_theme_id', String(id));
     url.searchParams.set('pb', '1');
     return url.toString();
   };
 
+  // Restore implies "I want to see the bar": drop our own hides first,
+  // otherwise the restored bar would be invisible behind our CSS.
+  const restoreBar = async () => {
+    state.sessionHide = false;
+    await setPersistentHide(false);
+    location.href = forceShowUrl();
+  };
+
   // ---------- storage ----------
+  // Settings live in chrome.storage.sync so they follow the Chrome profile
+  // across computers. Reads fall back to .local for pre-sync installs.
 
   const loadSettings = async () => {
     const keys = ['badgeMode', `hide:${host}`];
-    const stored = await chrome.storage.local.get(keys);
-    state.badgeMode = stored.badgeMode || 'full';
-    state.persistentHide = !!stored[`hide:${host}`];
+    const [synced, local] = await Promise.all([
+      chrome.storage.sync.get(keys),
+      chrome.storage.local.get(keys)
+    ]);
+    state.badgeMode = synced.badgeMode || local.badgeMode || 'full';
+    state.persistentHide = !!(synced[`hide:${host}`] ?? local[`hide:${host}`]);
   };
 
   const setBadgeMode = async (mode) => {
     state.badgeMode = mode;
-    await chrome.storage.local.set({ badgeMode: mode });
+    await chrome.storage.sync.set({ badgeMode: mode });
     renderBadge();
   };
 
   const setPersistentHide = async (on) => {
     state.persistentHide = on;
-    if (on) await chrome.storage.local.set({ [`hide:${host}`]: true });
-    else await chrome.storage.local.remove(`hide:${host}`);
+    if (on) await chrome.storage.sync.set({ [`hide:${host}`]: true });
+    else
+      await Promise.all([
+        chrome.storage.sync.remove(`hide:${host}`),
+        chrome.storage.local.remove(`hide:${host}`)
+      ]);
     syncHideCss();
     refreshPanel();
   };
@@ -143,8 +163,16 @@
 
   const buildBadge = () => {
     if (ui) return;
-    const hostEl = document.createElement('div');
+    // Custom-element tag, not a <div>: the host lives in the page's light DOM
+    // (a shadow root shields its contents, never the host itself), so page CSS
+    // can target it. A real culprit here was an extension injecting
+    // `div:empty { display: none }` - our host is :empty in light-DOM terms
+    // because all content sits in the shadow tree. A non-div tag dodges the
+    // whole class of div/element-targeting rules; the inline display guard
+    // below covers the rest (`*:empty`, `[id]`, etc.).
+    const hostEl = document.createElement('shopifybar-badge');
     hostEl.id = '__shopifybar-badge';
+    hostEl.style.setProperty('display', 'block', 'important');
     const shadow = hostEl.attachShadow({ mode: 'closed' });
 
     const style = document.createElement('style');
@@ -205,7 +233,7 @@
         ? 'Shopify bar: hidden by ShopifyBar'
         : 'Shopify bar: visible'
       : themeRoleIsLive()
-        ? 'Shopify bar: not present (live theme)'
+        ? 'Shopify bar: not present (normal on live theme - Restore bar can force it)'
         : 'Shopify bar: not present (hidden by Shopify - use Restore bar)';
 
     const rowHide = document.createElement('div');
@@ -226,10 +254,10 @@
     const rowActions = document.createElement('div');
     rowActions.className = 'row';
     const btnFix = panelButton('Restore bar', () => {
-      location.href = forceShowUrl();
+      restoreBar();
     });
     btnFix.title =
-      "Brings Shopify's preview bar back (reloads with preview_theme_id and pb=1). Use when Shopify's own hide has kept it away.";
+      "Brings Shopify's preview bar back (clears ShopifyBar hides, reloads with preview_theme_id and pb=1). Use when Shopify's own hide has kept it away.";
     rowActions.append(
       btnFix,
       panelButton('Copy preview link', async (e) => {
@@ -309,13 +337,15 @@
       return true;
     }
     if (msg?.type === 'forceShow') {
-      location.href = forceShowUrl();
       sendResponse({ ok: true });
+      restoreBar();
       return;
     }
   });
 
   // ---------- boot ----------
+
+  let booted = false;
 
   document.addEventListener('shopifybar:data', async (e) => {
     let payload;
@@ -324,17 +354,22 @@
     } catch {
       return;
     }
-    if (state.data) {
-      state.data = payload;
-      return;
-    }
     state.data = payload;
-    if (!payload.isShopify) return;
+    if (booted || !payload.isShopify) return;
+    booted = true;
 
     await loadSettings();
     syncHideCss();
     if (!payload.designMode) renderBadge();
   });
 
-  document.dispatchEvent(new CustomEvent('shopifybar:request'));
+  // window.Shopify may not be defined yet when document_idle fires on slow
+  // loads; re-ask until the page reports a Shopify storefront (or we give up).
+  let attempts = 0;
+  const request = () => {
+    if (booted || attempts++ >= 10) return;
+    document.dispatchEvent(new CustomEvent('shopifybar:request'));
+    setTimeout(request, 500);
+  };
+  request();
 })();
