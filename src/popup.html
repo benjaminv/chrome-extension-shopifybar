@@ -8,6 +8,8 @@
     .banner { padding: 8px 12px; color: #fff; font-weight: 700; font-size: 12px; }
     .banner.live { background: #108043; }
     .banner.preview { background: #c05717; }
+    .banner.dev { background: #d81b60; }
+    .banner.admin { background: #5c6ac4; }
     .banner.inactive { background: #444; color: #bbb; font-weight: 400; }
     h1 { font-size: 12px; margin: 0 0 2px; }
     .meta { color: #aaa; margin: 0 0 10px; word-break: break-all; }
@@ -16,6 +18,8 @@
     button.act { flex: 1 1 45%; background: #333; color: #eee; border: 1px solid #444; border-radius: 6px; padding: 6px 8px; font-size: 11px; cursor: pointer; }
     button.act:hover { background: #3d3d3d; }
     button.act.on { background: #0b5cad; border-color: #0b5cad; color: #fff; }
+    .uni { margin-top: 10px; padding-top: 8px; border-top: 1px solid #333; }
+    .uni .unihead { color: #888; margin: 0 0 6px; }
     .modes { display: flex; gap: 4px; align-items: center; margin-top: 10px; padding-top: 8px; border-top: 1px solid #333; }
     .modes span { color: #888; margin-right: 4px; }
     .modes button { background: none; border: 1px solid #444; color: #aaa; border-radius: 5px; padding: 3px 7px; font-size: 10px; cursor: pointer; }
@@ -29,14 +33,23 @@
     <h1 id="themeName"></h1>
     <p id="themeMeta" class="meta"></p>
     <p id="barStatus" class="status"></p>
-    <div class="row">
+    <div class="row" id="rowHide">
       <button id="btnSessionHide" class="act"></button>
       <button id="btnPersistentHide" class="act"></button>
     </div>
-    <div class="row">
+    <div class="row" id="rowActions">
       <button id="btnForceShow" class="act" title="Brings Shopify's preview bar back (clears ShopifyBar hides, reloads with preview_theme_id and pb=1). Use when Shopify's own hide has kept it away.">Restore bar</button>
       <button id="btnCopy" class="act">Copy preview link</button>
       <button id="btnEditor" class="act">Open theme editor</button>
+      <button id="btnStorefront" class="act hidden">Open storefront</button>
+    </div>
+    <div class="uni">
+      <div class="unihead">Customizer (all stores):</div>
+      <div class="row">
+        <button id="uniPin" class="act" data-key="pinRightBar" title="Keep the settings sidebar space reserved so the preview never shifts when selecting a section.">Pin right bar</button>
+        <button id="uniAi" class="act" data-key="hideAiBar" title="Hide the floating Sidekick 'Ask for changes' bar in the theme editor.">Hide AI bar</button>
+        <button id="uniFs" class="act" data-key="editorFullscreen" title="Hide both theme editor sidebars for a full-width preview.">Fullscreen</button>
+      </div>
     </div>
     <div class="modes">
       <span>On-page badge:</span>

@@ -1,5 +1,20 @@
 # Build log
 
+## 2026-07-18 - v0.2.0 - theme editor tweaks, recent stores, admin badge
+
+Big scope expansion: the extension now works inside the Shopify admin and theme editor (customizer), not just storefronts.
+
+- **Theme editor tweaks** (three universal toggles, `chrome.storage.sync`, apply to every store):
+  - **Pin right bar**: Shopify's 2025+ editor only shows the settings sidebar when a section/block is selected, causing a huge preview shift on every select/deselect (and under ~1608px window width it stacks over the left bar instead). The editor layout is a CSS grid on `PowerFrame__MainInterior` (`300px 1380px 0px 0px` unselected → `300px 1080px 300px 0px` selected); pinning forces the third column to 300px at all times so the preview never moves.
+  - **Hide AI bar**: the floating Sidekick "Ask for changes" bar over the preview (`div[class*="_FloatingControlsWrapper_"]`) is hidden until toggled back.
+  - **Fullscreen**: rebuilds the old editor's full-width view - collapses both sidebar columns (`0px 1fr 0px 0px` + `visibility: hidden` on the panels; `display: none` breaks grid auto-placement). Also injected as a native-looking button in the editor top bar right after the device-preview icon (Lucide maximize/minimize, classes borrowed from the neighbouring button, MutationObserver re-inserts it after React re-renders).
+  - Architecture: the whole editor UI lives in a cross-origin iframe (`online-store-web.shopifyapps.com`), so a new `src/editor.js` content script runs there with `all_frames: true`. Selectors verified live on 2026-07-18; CSS-module hash suffixes are unstable so selectors match stable prefixes/ids only.
+- **Badge on admin + customizer**: `content.js` now renders the badge on `admin.shopify.com` too (bottom-right so it never covers Save/Publish; panel opens upward). Theme name/role in the customizer come from `recentStores` - written live by the same script running inside the customizer's *preview* iframe (`*.myshopify.com`, `all_frames`, design mode), where `window.Shopify.theme` reports the edited theme truthfully. Falls back to parsing the tab title. Non-editor admin pages get an indigo ADMIN badge.
+- **Role colours**: live = green (unchanged), unpublished/offline = brown (unchanged), development (`shopify theme dev`) = pink `#d81b60`, admin = indigo `#5c6ac4`. Labels now LIVE / OFFLINE / DEV / DEMO instead of a catch-all PREVIEW.
+- **Recent stores**: the badge panel gained Current/Recent tabs. Recent lists up to 20 stores (recorded from storefront, preview-iframe, and admin visits) with links to live storefront/customizer, last offline or dev theme preview/customizer, and store admin - plus a per-store bin (Lucide trash-2) and a two-step "Clear all" (no blocking `confirm()`). Stored in `recentStores` (sync), writes deduplicated against the sync write-rate quota.
+- **Popup**: mirrors the three universal toggles and now works on admin/customizer tabs (role-coloured banner, Open storefront). `getState` responders are registered in top frames only so the customizer's preview iframes can't race the admin frame answering the popup.
+- Verified via playwright simulation against the live lbtimber editor (extension sources injected verbatim with a stubbed `chrome.*`): pin (grid stays `300px 1080px 300px` with nothing selected), AI bar hidden, fullscreen toggle round-trip via the injected top-bar button, admin badge + panel tabs + recent links all rendering correctly.
+
 ## 2026-07-04 - v0.1.1 - fixes from first days of real usage
 
 Four issues reported after a few days of use:

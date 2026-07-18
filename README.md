@@ -6,7 +6,12 @@ Read the story behind it: [The preview bar that wouldn't come back (so I built m
 
 ## Features
 
-- **Always-on theme badge**: a pill on every Shopify storefront page showing the theme name, colour-coded green `LIVE` or orange `PREVIEW`. Click it for details (theme ID, role, Shopify bar status) and actions. Auto-collapses to a dot on mobile viewports.
+- **Always-on theme badge**: a pill on every Shopify storefront page showing the theme name, colour-coded by role - green `LIVE`, brown `OFFLINE` (unpublished), pink `DEV` (`shopify theme dev` themes). Click it for details (theme ID, role, Shopify bar status) and actions. Auto-collapses to a dot on mobile viewports. Also shows on `admin.shopify.com` (indigo `ADMIN`) and inside the theme editor (bottom-right, role-coloured).
+- **Theme editor (customizer) tweaks** - three universal toggles, in the badge panel and popup, applying to every store:
+  - *Pin right bar* - keeps the settings sidebar space reserved so the preview never shifts when selecting/deselecting a section.
+  - *Hide AI bar* - removes the floating Sidekick "Ask for changes" bar until toggled back.
+  - *Fullscreen* - hides both sidebars for a full-width preview, like the old editor's fullscreen view. Also available as a native-looking button in the editor top bar, next to the device-preview icon.
+- **Recent stores**: the badge panel's Recent tab lists recently worked stores with one-click links - live storefront/customizer, last offline or dev theme preview/customizer, store admin - with per-store remove and clear-all.
 - **Hide Shopify's bar, two modes**:
   - *Hide this load* - hidden until the next navigation, then back to normal.
   - *Hide till unhide* - stays hidden on this store until you toggle it off. Per store, so other stores are unaffected.
@@ -25,12 +30,12 @@ Read the story behind it: [The preview bar that wouldn't come back (so I built m
 ## How it works
 
 - `src/main-world.js` runs in the page's MAIN world and reads `window.Shopify` (`theme.id`, `theme.name`, `theme.role`, `shop`, `designMode`), bridging it to the extension via a CustomEvent.
-- `src/content.js` renders the badge in a closed shadow root (store CSS cannot break it) and injects/removes the hide CSS. Per-store and UI settings live in `chrome.storage.local`.
+- `src/content.js` renders the badge in a closed shadow root (store CSS cannot break it) and injects/removes the hide CSS. Settings live in `chrome.storage.sync`. On `admin.shopify.com` it derives context from the URL; inside the customizer's preview iframe (design mode) it records the edited theme's real name/role into the recent-stores list, which the admin badge reads back.
+- `src/editor.js` runs inside the theme editor's cross-origin iframe (`online-store-web.shopifyapps.com`) and applies the pin/AI-bar/fullscreen CSS plus the top-bar fullscreen button.
 - `src/hide-css.js` holds the preview-bar selectors:
   - `#PBarNextFrameWrapper`, `[id^="PBar"]`, `[data-component-extra-ui_interaction_source="power_preview"]` - current bar (desktop and mobile variants)
   - `#preview-bar-iframe` - legacy bar
-- The badge is suppressed inside the theme editor customiser (`Shopify.designMode`).
-- No background worker, no build step, `storage` permission only. Runs on all http(s) hosts because storefronts use custom domains; it activates only when `window.Shopify.theme` exists.
+- No background worker, no build step, `storage` permission only. Runs on all http(s) hosts because storefronts use custom domains; it activates only when `window.Shopify.theme` exists (or on Shopify admin URLs).
 
 ## Verify before relying on it
 
