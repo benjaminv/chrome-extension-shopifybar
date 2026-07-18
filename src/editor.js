@@ -23,6 +23,19 @@
 
   const state = { pinRightBar: false, hideAiBar: false, editorFullscreen: false };
 
+  // When the extension is reloaded/updated, content scripts already injected
+  // into open tabs are orphaned: they keep running but every chrome.* call
+  // throws "Extension context invalidated". chrome.runtime.id is undefined
+  // once orphaned - detect that and tear down our button and CSS so the fresh
+  // script (after a page refresh) is the only one leaving marks on the page.
+  const orphaned = () => !chrome.runtime?.id;
+
+  const teardown = () => {
+    observer.disconnect();
+    document.getElementById(STYLE_ID)?.remove();
+    document.getElementById(BTN_ID)?.parentElement?.remove();
+  };
+
   // Lucide maximize / minimize
   const ICON = (name) =>
     `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">` +
@@ -84,6 +97,10 @@
     btn.style.alignItems = 'center';
     btn.style.justifyContent = 'center';
     btn.addEventListener('click', () => {
+      if (orphaned()) {
+        teardown();
+        return;
+      }
       chrome.storage.sync.set({ editorFullscreen: !state.editorFullscreen });
     });
     const wrap = document.createElement('span');
@@ -100,6 +117,10 @@
     rafPending = true;
     requestAnimationFrame(() => {
       rafPending = false;
+      if (orphaned()) {
+        teardown();
+        return;
+      }
       ensureButton();
     });
   });

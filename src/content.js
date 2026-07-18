@@ -28,6 +28,17 @@
 
   let ui = null; // { hostEl, wrap, pill, label, panel }
 
+  // After an extension reload/update this copy of the script is orphaned:
+  // still running in the page but with every chrome.* call throwing
+  // "Extension context invalidated" (chrome.runtime.id goes undefined).
+  // Detect it at the interactive entry points and remove our UI; the hide CSS
+  // is left in place so the preview bar doesn't flash back mid-session.
+  const orphaned = () => !chrome.runtime?.id;
+
+  const orphanTeardown = () => {
+    removeBadge();
+  };
+
   // ---------- preview bar hiding (storefront only) ----------
 
   const hideCssApplied = () => !!document.getElementById(HIDE_STYLE_ID);
@@ -154,12 +165,14 @@
   };
 
   const setBadgeMode = async (mode) => {
+    if (orphaned()) return orphanTeardown();
     state.badgeMode = mode;
     await chrome.storage.sync.set({ badgeMode: mode });
     renderBadge();
   };
 
   const setPersistentHide = async (on) => {
+    if (orphaned()) return orphanTeardown();
     state.persistentHide = on;
     if (on) await chrome.storage.sync.set({ [`hide:${host}`]: true });
     else
@@ -178,6 +191,7 @@
   };
 
   const setUniversal = async (key, on) => {
+    if (orphaned()) return orphanTeardown();
     state[key] = !!on;
     await chrome.storage.sync.set({ [key]: !!on });
     refreshPanel();
@@ -188,6 +202,7 @@
   const saveRecent = () => chrome.storage.sync.set({ recentStores: state.recentStores });
 
   const recordRecent = async () => {
+    if (orphaned()) return orphanTeardown();
     let handle;
     const patch = {};
     if (IS_ADMIN) {
@@ -328,6 +343,7 @@
     panel.className = 'panel hidden';
 
     pill.addEventListener('click', () => {
+      if (orphaned()) return orphanTeardown();
       panel.classList.toggle('hidden');
       if (!panel.classList.contains('hidden')) refreshPanel();
     });
@@ -745,7 +761,12 @@
         // The admin is a SPA - poll for route changes to keep the badge and
         // recent-store record in step with the visible page.
         let href = location.href;
-        setInterval(() => {
+        const poll = setInterval(() => {
+          if (orphaned()) {
+            clearInterval(poll);
+            orphanTeardown();
+            return;
+          }
           if (location.href === href) return;
           href = location.href;
           renderBadge();
