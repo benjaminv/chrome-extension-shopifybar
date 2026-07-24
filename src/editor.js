@@ -16,7 +16,12 @@
 //   div[class*="_FloatingControlsWrapper_"] (CSS-module class, hash suffix
 //   changes across builds - match on the stable prefix).
 (() => {
-  if (!/^\/themes\/\d+\/editor/.test(location.pathname)) return;
+  // The iframe does not always land on the editor path: on a cold hit it can
+  // start on an intermediate URL and reach /themes/<id>/editor via
+  // history.replaceState, with no new document (so no re-injection). A
+  // one-shot pathname bail here permanently disabled every tweak until a
+  // manual refresh - evaluate the route continuously instead.
+  const routeActive = () => /^\/themes\/\d+\/editor/.test(location.pathname);
 
   const STYLE_ID = '__shopifybar-editor';
   const BTN_ID = '__shopifybar-fs-btn';
@@ -30,10 +35,15 @@
   // script (after a page refresh) is the only one leaving marks on the page.
   const orphaned = () => !chrome.runtime?.id;
 
-  const teardown = () => {
-    observer.disconnect();
+  const removeMarks = () => {
     document.getElementById(STYLE_ID)?.remove();
     document.getElementById(BTN_ID)?.parentElement?.remove();
+  };
+
+  const teardown = () => {
+    observer.disconnect();
+    clearInterval(routePoll);
+    removeMarks();
   };
 
   // Lucide maximize / minimize
@@ -121,18 +131,44 @@
         teardown();
         return;
       }
-      ensureButton();
+      if (routeActive()) ensureButton();
     });
   });
 
   // ---------- boot ----------
 
+  let loaded = false;
+
+  const sync = () => {
+    if (!loaded) return;
+    if (routeActive()) {
+      applyCss();
+      ensureButton();
+    } else {
+      removeMarks();
+    }
+  };
+
+  // SPA route changes (in and out of the editor path) never re-run this
+  // script - poll cheaply; the MutationObserver keeps the button alive
+  // between ticks.
+  let href = location.href;
+  const routePoll = setInterval(() => {
+    if (orphaned()) {
+      teardown();
+      return;
+    }
+    if (location.href === href) return;
+    href = location.href;
+    sync();
+  }, 1000);
+
   chrome.storage.sync.get(['pinRightBar', 'hideAiBar', 'editorFullscreen']).then((v) => {
     state.pinRightBar = !!v.pinRightBar;
     state.hideAiBar = !!v.hideAiBar;
     state.editorFullscreen = !!v.editorFullscreen;
-    applyCss();
-    ensureButton();
+    loaded = true;
+    sync();
     observer.observe(document.documentElement, { childList: true, subtree: true });
   });
 
@@ -145,7 +181,7 @@
         dirty = true;
       }
     }
-    if (dirty) {
+    if (dirty && routeActive()) {
       applyCss();
       syncButtonIcon();
     }

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "ShopifyBar",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Always know which Shopify theme you are viewing - live or preview - even when Shopify's own preview bar is hidden. Hide the preview bar safely, tame the theme editor (pin right bar, hide AI bar, fullscreen), and jump between recent stores.",
   "permissions": [
     "storage"

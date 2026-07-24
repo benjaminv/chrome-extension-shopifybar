@@ -1,5 +1,15 @@
 # Build log
 
+## 2026-07-24 - v0.3.0 - customizer tweak reliability, recent-stores polish
+
+Fixes and improvements from three weeks of daily use:
+
+- **Customizer tweaks intermittently dead until a refresh** (reported: more than half of cold landings). `editor.js` bailed once, at injection time, if the iframe's path didn't match `/themes/<id>/editor` - but the `online-store-web.shopifyapps.com` iframe doesn't always start on that path; it can land on an intermediate URL and reach the editor route via client-side `history` navigation, which never re-injects the content script. So on those loads no tweak (pin/AI bar/fullscreen, top-bar button) ever applied. The route check is now continuous: a 1s href poll plus the existing MutationObserver apply the tweaks when the path matches and strip them (style + button) when it doesn't. Cause inferred from the code path - matches the "refresh always fixes it" symptom; to be confirmed against real usage.
+- **Recent tab layout**: "Store admin" moved from its own line up to the store-name row, sitting before the bin with a 12px+gap buffer so it isn't a mis-click away from delete.
+- **Per-store bin is now two-step** (it deleted instantly before): first click arms it red for 2.5s, second click removes - same pattern as "Clear all", still no blocking `confirm()`.
+- **`preview_theme_id` on live-theme links - only where the id is fresh.** A bare origin visit keeps showing whatever theme the session's preview cookie holds, so "visit live" silently wasn't switching after previewing another theme. The customizer's "Open storefront" and the popup's storefront URL now always append `preview_theme_id` (the id comes live from the current editor URL). The Recent tab's Live link deliberately stays a bare origin: its recorded live id is a snapshot, and after the store publishes a different theme a stale `preview_theme_id` would show an ex-live theme while claiming Live. Same reasoning: the Live line shows no theme name (a recorded name can silently stop being the live one), while Dev/Offline lines do - their identity IS the recorded theme.
+- **Dev and offline themes get separate slots per store** (`devTheme` + `lastTheme`; previously one slot, so a `shopify theme dev` session evicted the offline theme being QA'd and vice versa). Recent tab shows up to three lines per store, in fixed order Live / Offline / Dev, with only the label word in white (names and links stay muted - it's a tiny dash, less noise wins). Old entries with a dev theme in `lastTheme` migrate lazily on load.
+
 ## 2026-07-18 - v0.2.0 - theme editor tweaks, recent stores, admin badge
 
 Big scope expansion: the extension now works inside the Shopify admin and theme editor (customizer), not just storefronts.

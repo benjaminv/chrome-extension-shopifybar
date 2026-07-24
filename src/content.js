@@ -22,7 +22,7 @@
     pinRightBar: false, // universal: keep customizer right bar space reserved
     hideAiBar: false, // universal: hide Sidekick "Ask for changes" bar
     editorFullscreen: false, // universal: hide both customizer sidebars
-    recentStores: {}, // handle -> { handle, shop, origin, lastVisited, liveTheme, lastTheme }
+    recentStores: {}, // handle -> { handle, shop, origin, lastVisited, liveTheme, devTheme, lastTheme }
     panelTab: 'current' // 'current' | 'recent'
   };
 
@@ -138,6 +138,7 @@
     const rec = state.recentStores[ctx.handle];
     if (rec?.liveTheme && rec.liveTheme.id === ctx.themeId)
       return { ...rec.liveTheme, role: 'main' };
+    if (rec?.devTheme && rec.devTheme.id === ctx.themeId) return rec.devTheme;
     if (rec?.lastTheme && rec.lastTheme.id === ctx.themeId) return rec.lastTheme;
     return { id: ctx.themeId, name: titleThemeName(), role: null };
   };
@@ -160,7 +161,7 @@
     ]);
     state.badgeMode = synced.badgeMode || local.badgeMode || 'full';
     state.persistentHide = !!(synced[`hide:${host}`] ?? local[`hide:${host}`]);
-    state.recentStores = synced.recentStores || {};
+    state.recentStores = migrateRecent(synced.recentStores);
     for (const key of UNIVERSAL_KEYS) state[key] = !!synced[key];
   };
 
@@ -199,6 +200,19 @@
 
   // ---------- recent stores ----------
 
+  // Entries written before devTheme existed keep dev themes in lastTheme;
+  // move them over so both slots render (no write-back needed - the next
+  // recordRecent persists the migrated shape).
+  const migrateRecent = (stores) => {
+    for (const e of Object.values(stores || {})) {
+      if (e.lastTheme?.role === 'development') {
+        if (!e.devTheme) e.devTheme = e.lastTheme;
+        delete e.lastTheme;
+      }
+    }
+    return stores || {};
+  };
+
   const saveRecent = () => chrome.storage.sync.set({ recentStores: state.recentStores });
 
   const recordRecent = async () => {
@@ -218,7 +232,10 @@
       if (!state.data.designMode) patch.origin = location.origin;
       const t = state.data.theme;
       if (t) {
+        // Dev and non-dev previews get separate slots so a `shopify theme dev`
+        // session doesn't evict the offline theme being QA'd (or vice versa).
         if (t.role === 'main') patch.liveTheme = { id: t.id, name: t.name };
+        else if (t.role === 'development') patch.devTheme = { id: t.id, name: t.name, role: t.role };
         else patch.lastTheme = { id: t.id, name: t.name, role: t.role };
       }
     }
@@ -244,11 +261,19 @@
   const storeLinks = (e) => {
     const origin = e.origin || `https://${e.shop || `${e.handle}.myshopify.com`}`;
     const admin = `https://admin.shopify.com/store/${e.handle}`;
+    const preview = (t) => (t ? `${origin}/?preview_theme_id=${t.id}` : null);
+    const editor = (t) => (t ? `${admin}/themes/${t.id}/editor` : null);
     return {
+      // Live stays a bare origin link: the recorded live id is a snapshot and
+      // a preview_theme_id from stale data would show an ex-live theme while
+      // claiming Live. (The customizer's Open storefront does use the id -
+      // there it comes fresh from the current URL, not from storage.)
       live: origin,
-      liveEditor: e.liveTheme ? `${admin}/themes/${e.liveTheme.id}/editor` : `${admin}/themes`,
-      offline: e.lastTheme ? `${origin}/?preview_theme_id=${e.lastTheme.id}` : null,
-      offlineEditor: e.lastTheme ? `${admin}/themes/${e.lastTheme.id}/editor` : null,
+      liveEditor: editor(e.liveTheme) || `${admin}/themes`,
+      dev: preview(e.devTheme),
+      devEditor: editor(e.devTheme),
+      offline: preview(e.lastTheme),
+      offlineEditor: editor(e.lastTheme),
       admin
     };
   };
@@ -282,6 +307,7 @@
     button.act { flex: 1 1 45%; background: #333; color: #eee; border: 1px solid #444; border-radius: 6px; padding: 6px 8px; font-size: 11px; cursor: pointer; }
     button.act:hover { background: #3d3d3d; }
     button.act.on { background: #0b5cad; border-color: #0b5cad; color: #fff; }
+    button.act.armed, button.act.armed:hover { background: #c62828; border-color: #c62828; color: #fff; }
     .uni { margin-top: 10px; padding-top: 8px; border-top: 1px solid #333; }
     .uni .unihead { color: #888; margin: 0 0 6px; }
     .modes { display: flex; gap: 4px; align-items: center; margin-top: 10px; padding-top: 8px; border-top: 1px solid #333; }
@@ -289,11 +315,16 @@
     .modes button { background: none; border: 1px solid #444; color: #aaa; border-radius: 5px; padding: 3px 7px; font-size: 10px; cursor: pointer; }
     .modes button.on { border-color: #0b5cad; color: #fff; background: #0b5cad; }
     .store { border: 1px solid #333; border-radius: 8px; padding: 8px; margin-bottom: 6px; }
-    .store .shead { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 4px; }
-    .store .shead b { font-size: 12px; word-break: break-all; }
-    .store .bin { background: none; border: none; color: #888; cursor: pointer; padding: 2px; display: flex; flex: none; }
+    .store .shead { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+    .store .shead b { font-size: 12px; word-break: break-all; flex: 1; }
+    .store .shead .adminlink { flex: none; font-size: 11px; }
+    /* Extra gap before the bin so the admin link isn't a mis-click away. */
+    .store .bin { background: none; border: none; color: #888; cursor: pointer; padding: 2px; display: flex; flex: none; margin-left: 12px; align-items: center; }
     .store .bin:hover { color: #e66; }
+    .store .bin.armed, .store .bin.armed:hover { background: #c62828; color: #fff; border-radius: 4px; padding: 2px 7px; font-size: 10px; font-weight: 600; line-height: 1.4; }
     .store p { margin: 3px 0; color: #aaa; }
+    /* Only the Live/Offline/Dev word pops; names and links stay subtle. */
+    .store p .tlabel { color: #eee; }
     .store a { color: #6ba7ff; text-decoration: none; }
     .store a:hover { text-decoration: underline; }
     .emptynote { color: #888; margin: 4px 0 8px; }
@@ -444,42 +475,70 @@
       head.className = 'shead';
       const name = document.createElement('b');
       name.textContent = e.handle;
+      const adminLink = link(links.admin, 'Store admin');
+      adminLink.className = 'adminlink';
       const bin = document.createElement('button');
       bin.className = 'bin';
-      bin.title = `Remove ${e.handle} from recent`;
+      const disarmTitle = `Remove ${e.handle} from recent`;
+      bin.title = disarmTitle;
       bin.innerHTML = BIN_SVG;
+      // Two-step delete, same re-labelling pattern as Clear all. Armed state
+      // is a red "Remove?" text pill, not a recoloured glyph - hover already
+      // turns the glyph red, so a colour-only change is invisible mid-hover.
       bin.addEventListener('click', async () => {
+        if (!bin.dataset.armed) {
+          bin.dataset.armed = '1';
+          bin.classList.add('armed');
+          bin.textContent = 'Remove?';
+          bin.title = `Click again to remove ${e.handle}`;
+          setTimeout(() => {
+            delete bin.dataset.armed;
+            bin.classList.remove('armed');
+            bin.innerHTML = BIN_SVG;
+            bin.title = disarmTitle;
+          }, 2500);
+          return;
+        }
         delete state.recentStores[e.handle];
         await saveRecent();
         refreshPanel();
       });
-      head.append(name, bin);
+      head.append(name, adminLink, bin);
       box.appendChild(head);
 
+      const label = (text) => {
+        const s = document.createElement('span');
+        s.className = 'tlabel';
+        s.textContent = text;
+        return s;
+      };
+
+      // No theme name on Live: the record is a snapshot, and a store can
+      // publish a different theme between visits - better to say less than
+      // to name an ex-live theme as Live.
       const liveLine = document.createElement('p');
-      liveLine.append('Live: ', link(links.live, 'storefront'), ' · ', link(links.liveEditor, 'customizer'));
+      liveLine.append(label('Live'), ': ', link(links.live, 'storefront'), ' · ', link(links.liveEditor, 'customizer'));
       box.appendChild(liveLine);
 
-      if (e.lastTheme) {
-        const offLine = document.createElement('p');
-        const label = e.lastTheme.role === 'development' ? 'Dev' : 'Offline';
-        offLine.append(
-          `${label} (${e.lastTheme.name || `#${e.lastTheme.id}`}): `,
-          link(links.offline, 'preview'),
+      const themeLine = (t, name, previewHref, editorHref) => {
+        const p = document.createElement('p');
+        p.append(
+          label(name),
+          ` (${t.name || `#${t.id}`}): `,
+          link(previewHref, 'preview'),
           ' · ',
-          link(links.offlineEditor, 'customizer')
+          link(editorHref, 'customizer')
         );
-        box.appendChild(offLine);
-      }
-
-      const adminLine = document.createElement('p');
-      adminLine.append(link(links.admin, 'Store admin'));
-      box.appendChild(adminLine);
+        box.appendChild(p);
+      };
+      if (e.lastTheme) themeLine(e.lastTheme, 'Offline', links.offline, links.offlineEditor);
+      if (e.devTheme) themeLine(e.devTheme, 'Dev', links.dev, links.devEditor);
 
       panel.appendChild(box);
     }
 
-    // Two-step clear-all: no blocking confirm() dialogs on the page.
+    // Two-step clear-all: no blocking confirm() dialogs on the page. Same
+    // armed treatment as the per-store bin: red fill + 2.5s auto-disarm.
     const clearRow = document.createElement('div');
     clearRow.className = 'row';
     const clearBtn = panelButton('Clear all recent stores', async () => {
@@ -489,7 +548,13 @@
         refreshPanel();
       } else {
         clearBtn.dataset.armed = '1';
+        clearBtn.classList.add('armed');
         clearBtn.textContent = 'Click again to clear all';
+        setTimeout(() => {
+          delete clearBtn.dataset.armed;
+          clearBtn.classList.remove('armed');
+          clearBtn.textContent = 'Clear all recent stores';
+        }, 2500);
       }
     });
     clearRow.appendChild(clearBtn);
@@ -571,8 +636,9 @@
       title.textContent = theme.name || `Theme #${ctx.themeId}`;
       meta.textContent = `#${ctx.themeId} - ${theme.role ? (theme.role === 'main' ? 'live theme' : `role: ${theme.role}`) : 'customizer'}`;
       const origin = rec?.origin || `https://${ctx.handle}.myshopify.com`;
-      const viewUrl =
-        theme.role === 'main' ? origin : `${origin}/?preview_theme_id=${ctx.themeId}`;
+      // preview_theme_id even for the live theme: it forces the switch when
+      // the session's preview cookie still points at another theme.
+      const viewUrl = `${origin}/?preview_theme_id=${ctx.themeId}`;
       rowActions.append(
         panelButton('Open storefront', () => window.open(viewUrl, '_blank')),
         panelButton('Copy preview link', async (e) => {
@@ -683,10 +749,7 @@
             handle: ctx.handle,
             isEditor: ctx.isEditor,
             theme,
-            storefrontUrl:
-              theme && theme.role !== 'main'
-                ? `${origin}/?preview_theme_id=${ctx.themeId}`
-                : origin,
+            storefrontUrl: theme ? `${origin}/?preview_theme_id=${ctx.themeId}` : origin,
             ...universal
           });
           return;
@@ -743,7 +806,7 @@
       state.persistentHide = !!changes[`hide:${host}`].newValue;
       syncHideCss();
     }
-    if (changes.recentStores) state.recentStores = changes.recentStores.newValue || {};
+    if (changes.recentStores) state.recentStores = migrateRecent(changes.recentStores.newValue);
     if (changes.badgeMode || changes.recentStores) renderBadge();
     refreshPanel();
   });
